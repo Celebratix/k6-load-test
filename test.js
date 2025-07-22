@@ -40,20 +40,19 @@ const orderMap = {};
 export default function () {
   const eventRes = http.get(
     `${BASE_URL}${endpoints.getEventInfo(CHANNEL_SLUG, EVENT_SQID)}`,
-    { headers: HEADERS }
+    { headers: HEADERS, tags: { name: "GET /shop/v2/:channel/:event" } }
   );
   check(eventRes, { "event info status is 200": (r) => r.status === 200 });
 
   let eventJson;
   try {
-    eventJson = eventRes.status === 200 ? eventRes.json() : null;
+    eventJson = eventRes.json();
   } catch (e) {
     console.error("❌ Failed to parse event JSON. Status:", eventRes.status);
-    console.error("Body:", eventRes.body?.substring(0, 200));
+    console.error("Body:", eventRes.body);
     return;
   }
 
-  if (!eventJson) return;
   const ticketDict = eventJson.ticketTypeDictionary || {};
 
   if (__ITER === 0) {
@@ -73,22 +72,15 @@ export default function () {
         trackingLinkCode: null,
         loyaltyLinkCode: null,
       }),
-      { headers: HEADERS }
+      { headers: HEADERS, tags: { name: "POST /shop/v1/orders/primary" } }
     );
 
     check(orderRes, {
       "order creation status is 200": (r) => r.status === 200,
     });
-
-    let orderId;
-    try {
-      orderId = orderRes.status === 200 ? orderRes.json().orderId : null;
-    } catch (e) {
-      console.error("❌ Failed to parse order creation response");
-      return;
-    }
-
+    const orderId = orderRes.json().orderId;
     if (!orderId) return;
+
     orderMap[__VU] = { orderId, guid: uuidv4() };
     console.log(`✅ Order created: ${orderId}`);
     return;
@@ -100,22 +92,13 @@ export default function () {
 
   const orderStateRes = http.get(`${BASE_URL}${endpoints.getOrder(orderId)}`, {
     headers: HEADERS,
+    tags: { name: "GET /shop/v1/orders/:orderId" },
   });
   check(orderStateRes, {
     "order state status is 200": (r) => r.status === 200,
   });
 
-  let orderState;
-  try {
-    orderState =
-      orderStateRes.status === 200 ? orderStateRes.json() : undefined;
-  } catch {
-    console.error("❌ Failed to parse order state");
-    return;
-  }
-
-  if (!orderState) return;
-
+  const orderState = orderStateRes.json();
   const existingTicketTypeIds = (orderState.orderLines || []).map(
     (line) => line.ticketTypeId
   );
@@ -153,7 +136,10 @@ export default function () {
   const res = http.post(
     `${BASE_URL}${endpoints.updateTicket(orderId, ticket.id)}`,
     JSON.stringify({ ticketQuantity: quantity }),
-    { headers: HEADERS }
+    {
+      headers: HEADERS,
+      tags: { name: "POST /shop/v1/orders/:orderId/tickets" },
+    }
   );
 
   const isExpected = ticket.soldOut
@@ -161,31 +147,33 @@ export default function () {
     : res.status === 200 || res.status === 422;
   check(res, { "ticket update status": () => isExpected });
 
-  const updatedRes = http.get(`${BASE_URL}${endpoints.getOrder(orderId)}`, {
-    headers: HEADERS,
-  });
-  check(updatedRes, {
+  const updatedOrderStateRes = http.get(
+    `${BASE_URL}${endpoints.getOrder(orderId)}`,
+    { headers: HEADERS, tags: { name: "GET /shop/v1/orders/:orderId" } }
+  );
+  check(updatedOrderStateRes, {
     "updated order state status is 200": (r) => r.status === 200,
   });
 
   let updatedOrderState;
-  try {
-    updatedOrderState =
-      updatedRes.status === 200 ? updatedRes.json() : undefined;
-  } catch {
-    console.error("❌ Failed to parse updated order JSON");
-    console.error("Body:", updatedRes.body?.substring(0, 200));
-    return;
-  }
-
-  if (!updatedOrderState) {
+  if (updatedOrderStateRes.status === 200) {
+    try {
+      updatedOrderState = updatedOrderStateRes.json();
+    } catch (e) {
+      console.error(
+        "❌ Failed to parse updated order JSON. Status:",
+        updatedOrderStateRes.status
+      );
+      console.error("Body:", updatedOrderStateRes.body?.substring(0, 200));
+      return;
+    }
+  } else {
     console.error(
       "❌ Failed to get updated order state. Status:",
-      updatedRes.status
+      updatedOrderStateRes.status
     );
     return;
   }
-
   const hasTickets = (updatedOrderState.orderLines || []).length > 0;
 
   if (loopIndex % 5 === 0 && hasTickets) {
@@ -195,11 +183,14 @@ export default function () {
         firstName: guid.substring(0, 8),
         lastName: guid.substring(9, 13),
         emailAddress: `${guid}@gmail.com`,
-        city: "Test City",
-        dateOfBirth: "1990-01-01",
-        gender: "Other",
+        city: null,
+        dateOfBirth: null,
+        gender: null,
       }),
-      { headers: HEADERS }
+      {
+        headers: HEADERS,
+        tags: { name: "POST /shop/v1/orders/:orderId/prepare" },
+      }
     );
 
     check(prepRes, { "repeat prepare order status": (r) => r.status === 200 });
