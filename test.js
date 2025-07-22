@@ -11,7 +11,8 @@ export const options = {
   ],
 };
 
-const BASE_URL = "https://api-dev.celebratix.io";
+//const BASE_URL = "https://api-dev.celebratix.io";
+const BASE_URL = "https://service-api";
 const EVENT_SQID = "e_wmkmd";
 const CHANNEL_SLUG = "nshh9";
 
