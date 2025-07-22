@@ -14,7 +14,7 @@ export const options = {
 
 const BASE_URL = "http://service-api";
 const EVENT_SQID = "e_wmkmd";
-const CHANNEL_SLUG = "gejay";
+const CHANNEL_SLUG = "nshh9";
 
 const HEADERS = {
   "User-Agent":
@@ -29,7 +29,7 @@ const TICKETS_TO_TEST = [
   { id: "dbb01378-13d6-4cfc-90dd-0d13879e89a7", name: "Ticket A" },
   { id: "3a6f52ae-d2aa-4d7c-a1b9-09711bba07aa", name: "Ticket Delta" },
   {
-    id: "b7a9a2dd-7c7d-45a7-a93d-d01cd32d161e",
+    id: "8765c8d2-63a5-4224-bd9f-ed5a3f4b54a8",
     name: "Early Bird (Sold Out)",
     soldOut: true,
   },
