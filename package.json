@@ -1,0 +1,10 @@
+{
+  "name": "celebratix-loadtest",
+  "version": "1.0.0",
+  "description": "Load testing scripts using k6 for the Celebratix API",
+  "scripts": {
+    "test": "k6 run test.js"
+  },
+  "keywords": ["k6", "loadtest", "celebratix"],
+  "license": "MIT"
+}
