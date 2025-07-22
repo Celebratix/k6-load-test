@@ -12,7 +12,7 @@ export const options = {
   ],
 };
 
-const BASE_URL = "https://api-staging.celebratix.io";
+const BASE_URL = "http://service-api";
 const EVENT_SQID = "e_wmkmd";
 const CHANNEL_SLUG = "gejay";
 
