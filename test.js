@@ -1,8 +1,7 @@
-// k6-ticket-loop-test.js
-
 import http from "k6/http";
 import { check, sleep } from "k6";
 import { uuidv4 } from "https://jslib.k6.io/k6-utils/1.4.0/index.js";
+import { endpoints } from "./endpoints.js";
 
 export const options = {
   stages: [
@@ -12,7 +11,7 @@ export const options = {
   ],
 };
 
-const BASE_URL = "http://service-api";
+const BASE_URL = "https://api-dev.celebratix.io";
 const EVENT_SQID = "e_wmkmd";
 const CHANNEL_SLUG = "nshh9";
 
@@ -39,20 +38,21 @@ const orderMap = {};
 
 export default function () {
   const eventRes = http.get(
-    `${BASE_URL}/shop/v2/${CHANNEL_SLUG}/${EVENT_SQID}`,
+    `${BASE_URL}${endpoints.getEventInfo(CHANNEL_SLUG, EVENT_SQID)}`,
     { headers: HEADERS }
   );
   check(eventRes, { "event info status is 200": (r) => r.status === 200 });
 
   let eventJson;
   try {
-    eventJson = eventRes.json();
+    eventJson = eventRes.status === 200 ? eventRes.json() : null;
   } catch (e) {
     console.error("❌ Failed to parse event JSON. Status:", eventRes.status);
-    console.error("Body:", eventRes.body);
+    console.error("Body:", eventRes.body?.substring(0, 200));
     return;
   }
 
+  if (!eventJson) return;
   const ticketDict = eventJson.ticketTypeDictionary || {};
 
   if (__ITER === 0) {
@@ -64,7 +64,7 @@ export default function () {
     const delta = ticketDict[initTicket.id].deltaTicketsPerPurchase || 1;
 
     const orderRes = http.post(
-      `${BASE_URL}/shop/v1/orders/primary`,
+      `${BASE_URL}${endpoints.createOrder}`,
       JSON.stringify({
         ticketTypeId: initTicket.id,
         ticketQuantity: delta,
@@ -78,9 +78,16 @@ export default function () {
     check(orderRes, {
       "order creation status is 200": (r) => r.status === 200,
     });
-    const orderId = orderRes.json().orderId;
-    if (!orderId) return;
 
+    let orderId;
+    try {
+      orderId = orderRes.status === 200 ? orderRes.json().orderId : null;
+    } catch (e) {
+      console.error("❌ Failed to parse order creation response");
+      return;
+    }
+
+    if (!orderId) return;
     orderMap[__VU] = { orderId, guid: uuidv4() };
     console.log(`✅ Order created: ${orderId}`);
     return;
@@ -90,14 +97,24 @@ export default function () {
   if (!session) return;
   const { orderId, guid } = session;
 
-  const orderStateRes = http.get(`${BASE_URL}/shop/v1/orders/${orderId}`, {
+  const orderStateRes = http.get(`${BASE_URL}${endpoints.getOrder(orderId)}`, {
     headers: HEADERS,
   });
   check(orderStateRes, {
     "order state status is 200": (r) => r.status === 200,
   });
 
-  const orderState = orderStateRes.json();
+  let orderState;
+  try {
+    orderState =
+      orderStateRes.status === 200 ? orderStateRes.json() : undefined;
+  } catch {
+    console.error("❌ Failed to parse order state");
+    return;
+  }
+
+  if (!orderState) return;
+
   const existingTicketTypeIds = (orderState.orderLines || []).map(
     (line) => line.ticketTypeId
   );
@@ -133,7 +150,7 @@ export default function () {
   );
 
   const res = http.post(
-    `${BASE_URL}/shop/v1/orders/${orderId}/tickets/${ticket.id}`,
+    `${BASE_URL}${endpoints.updateTicket(orderId, ticket.id)}`,
     JSON.stringify({ ticketQuantity: quantity }),
     { headers: HEADERS }
   );
@@ -143,27 +160,43 @@ export default function () {
     : res.status === 200 || res.status === 422;
   check(res, { "ticket update status": () => isExpected });
 
-  const updatedOrderStateRes = http.get(
-    `${BASE_URL}/shop/v1/orders/${orderId}`,
-    { headers: HEADERS }
-  );
-  check(updatedOrderStateRes, {
+  const updatedRes = http.get(`${BASE_URL}${endpoints.getOrder(orderId)}`, {
+    headers: HEADERS,
+  });
+  check(updatedRes, {
     "updated order state status is 200": (r) => r.status === 200,
   });
 
-  const updatedOrderState = updatedOrderStateRes.json();
+  let updatedOrderState;
+  try {
+    updatedOrderState =
+      updatedRes.status === 200 ? updatedRes.json() : undefined;
+  } catch {
+    console.error("❌ Failed to parse updated order JSON");
+    console.error("Body:", updatedRes.body?.substring(0, 200));
+    return;
+  }
+
+  if (!updatedOrderState) {
+    console.error(
+      "❌ Failed to get updated order state. Status:",
+      updatedRes.status
+    );
+    return;
+  }
+
   const hasTickets = (updatedOrderState.orderLines || []).length > 0;
 
   if (loopIndex % 5 === 0 && hasTickets) {
     const prepRes = http.post(
-      `${BASE_URL}/shop/v1/orders/${orderId}/prepare`,
+      `${BASE_URL}${endpoints.prepareOrder(orderId)}`,
       JSON.stringify({
         firstName: guid.substring(0, 8),
         lastName: guid.substring(9, 13),
         emailAddress: `${guid}@gmail.com`,
-        city: null,
-        dateOfBirth: null,
-        gender: null,
+        city: "Test City",
+        dateOfBirth: "1990-01-01",
+        gender: "Other",
       }),
       { headers: HEADERS }
     );

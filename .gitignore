@@ -1,0 +1,10 @@
+.DS_Store
+node_modules
+/build
+/package
+*.local
+!.env.example
+/src/api/generated
+/.env.sentry-build-plugin
+/openapi-ts-error-*.log
+output.log
